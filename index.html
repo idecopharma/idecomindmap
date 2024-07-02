@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LƯỢC ĐỒ TRIỂN KHAI KẾ HOẠCH - IDECO</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsPlumb/2.15.6/js/jsplumb.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/docx/7.1.0/docx.min.js"></script>
+    
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f4f8;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #2c3e50;
+        }
+        #info-form {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            background-color: #ffffff;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        #info-form input, #info-form select {
+            padding: 8px;
+            border: 1px solid #bdc3c7;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        #mindmap-container {
+            width: 100%;
+            height: 800px;
+            border: 1px solid #bdc3c7;
+            margin-bottom: 20px;
+            position: relative;
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            overflow: auto;
+        }
+        .mindmap-node {
+            position: absolute;
+            background-color: #3498db;
+            border: 2px solid #2980b9;
+            padding: 10px;
+            border-radius: 5px;
+            cursor: move;
+            min-width: 20px;
+            min-height: 20px;
+            color: #ffffff;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+        .mindmap-node:hover {
+            box-shadow: 0 6px 8px rgba(0,0,0,0.15);
+        }
+        .resize-handle {
+            width: 10px;
+            height: 10px;
+            background-color: #2980b9;
+            position: absolute;
+            right: 0;
+            bottom: 0;
+            cursor: se-resize;
+            border-radius: 0 0 5px 0;
+        }
+        #controls {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 10px 15px;
+            margin: 5px;
+            cursor: pointer;
+            background-color: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: background-color 0.3s, box-shadow 0.3s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        button:hover {
+            background-color: #c0392b;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+        #style-controls {
+            margin-top: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #ffffff;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        #style-controls > * {
+            margin: 0 10px;
+        }
+        .node-content {
+            outline: none;
+            min-height: 20px;
+            word-wrap: break-word;
+        }
+        #popup {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            z-index: 1000;
+        }
+        #popup textarea {
+            width: 100%;
+            height: 100px;
+            padding: 8px;
+            margin-bottom: 10px;
+            resize: vertical;
+        }
+        #popup button {
+            width: 100%;
+        }
+        #title-form {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: white;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        #metadata {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: white;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1 id="main-title">LƯỢC ĐỒ TRIỂN KHAI KẾ HOẠCH - IDECO</h1>
+    </header>
+    
+    <div id="info-form">
+        <input type="text" id="creator" placeholder="Người lập">
+        <input type="text" id="department" placeholder="Bộ phận">
+        <input type="date" id="date">
+    </div>
+    
+    <div id="mindmap-container">
+        <div id="title-form">
+            <input type="text" id="mindmap-title" placeholder="Tiêu đề lược đồ">
+            <button onclick="updateTitle()">Cập nhật tiêu đề</button>
+        </div>
+        <div id="metadata">
+            <p id="creator-info"></p>
+            <p id="department-info"></p>
+            <p id="date-info"></p>
+        </div>
+    </div>
+    
+    <div id="controls">
+        <button id="add-node">Thêm nút</button>
+        <button id="edit-node">Sửa văn bản</button>
+        <button id="delete-node">Xóa nút</button>
+        <button id="connect-nodes">Kết nối</button>
+        <button id="delete-connection">Xóa kết nối</button>
+        <button id="undo">Khôi phục</button>
+        <button id="send-email">Gửi email</button>
+        <button id="export-image">Xuất hình ảnh</button>
+        <button id="export-pdf">Xuất PDF</button>
+        <button id="export-word">Xuất Word</button>
+        <button id="save-mindmap">Lưu Mindmap</button>
+        <button id="load-mindmap">Tải Mindmap</button>
+    </div>
+
+    <div id="style-controls">
+        <input type="color" id="node-color" value="#3498db">
+        <input type="color" id="text-color" value="#ffffff">
+        <input type="color" id="border-color" value="#2980b9">
+        <select id="font-family">
+            <option value="Segoe UI">Segoe UI</option>
+            <option value="Arial">Arial</option>
+            <option value="Verdana">Verdana</option>
+        </select>
+        <input type="number" id="font-size" min="8" max="24" value="14">
+        <select id="node-shape">
+            <option value="rectangle">Hình chữ nhật</option>
+            <option value="oval">Hình oval</option>
+        </select>
+    </div>
+
+    <div id="popup">
+        <textarea id="popup-input" placeholder="Nhập nội dung"></textarea>
+        <button onclick="updateNodeContent()">OK</button>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const mindmapContainer = document.getElementById('mindmap-container');
+            const addNodeBtn = document.getElementById('add-node');
+            const editNodeBtn = document.getElementById('edit-node');
+            const deleteNodeBtn = document.getElementById('delete-node');
+            const connectNodesBtn = document.getElementById('connect-nodes');
+            const deleteConnectionBtn = document.getElementById('delete-connection');
+            const undoBtn = document.getElementById('undo');
+            const sendEmailBtn = document.getElementById('send-email');
+            const exportImageBtn = document.getElementById('export-image');
+            const exportPdfBtn = document.getElementById('export-pdf');
+            const exportWordBtn = document.getElementById('export-word');
+            const saveMindmapBtn = document.getElementById('save-mindmap');
+            const loadMindmapBtn = document.getElementById('load-mindmap');
+
+            const nodeColorInput = document.getElementById('node-color');
+            const textColorInput = document.getElementById('text-color');
+            const borderColorInput = document.getElementById('border-color');
+            const fontFamilySelect = document.getElementById('font-family');
+            const fontSizeInput = document.getElementById('font-size');
+            const nodeShapeSelect = document.getElementById('node-shape');
+
+            const popup = document.getElementById('popup');
+            const popupInput = document.getElementById('popup-input');
+
+            let nodeId = 0;
+            let selectedNodes = [];
+            let currentEditingNode = null;
+            let undoStack = [];
+            let selectedConnection = null;
+
+            jsPlumb.ready(function() {
+                const instance = jsPlumb.getInstance({
+                    Connector: ["Bezier", { curviness: 50 }],
+                    DragOptions: { cursor: "pointer", zIndex: 2000 },
+                    PaintStyle: { stroke: "#2c3e50", strokeWidth: 2 },
+                    EndpointStyle: { radius: 9, fill: "#2c3e50" },
+                    HoverPaintStyle: { stroke: "#1abc9c" },
+                    EndpointHoverStyle: { fill: "#1abc9c" },
+                    Container: "mindmap-container"
+                });
+
+                addNodeBtn.addEventListener('click', createNode);
+                editNodeBtn.addEventListener('click', editSelectedNode);
+                deleteNodeBtn.addEventListener('click', deleteSelectedNode);
+                connectNodesBtn.addEventListener('click', connectNodes);
+                deleteConnectionBtn.addEventListener('click', deleteSelectedConnection);
+                undoBtn.addEventListener('click', undo);
+                sendEmailBtn.addEventListener('click', sendEmail);
+                exportImageBtn.addEventListener('click', exportImage);
+                exportPdfBtn.addEventListener('click', exportPdf);
+                exportWordBtn.addEventListener('click', exportWord);
+                saveMindmapBtn.addEventListener('click', saveMindmap);
+                loadMindmapBtn.addEventListener('click', loadMindmap);
+
+                nodeColorInput.addEventListener('change', updateStyles);
+                textColorInput.addEventListener('change', updateStyles);
+                borderColorInput.addEventListener('change', updateStyles);
+                fontFamilySelect.addEventListener('change', updateStyles);
+                fontSizeInput.addEventListener('change', updateStyles);
+                nodeShapeSelect.addEventListener('change', updateStyles);
+
+                document.addEventListener('keydown', handleKeyPress);
+
+                function createNode() {
+                    const node = document.createElement('div');
+                    node.id = `node${nodeId++}`;
+                    node.className = 'mindmap-node';
+                    node.innerHTML = `<div class="node-content">New Node</div><div class="resize-handle"></div>`;
+                    node.style.left = `${Math.random() * (mindmapContainer.offsetWidth - 100)}px`;
+                    node.style.top = `${Math.random() * (mindmapContainer.offsetHeight - 50)}px`;
+                    
+                    mindmapContainer.appendChild(node);
+                    
+                    instance.draggable(node);
+                    
+                    instance.makeSource(node, {
+                        filter: ".node-content",
+                        anchor: "Continuous"
+                    });
+                    instance.makeTarget(node, {
+                        dropOptions: { hoverClass: "dragHover" },
+                        anchor: "Continuous"
+                    });
+
+                    node.addEventListener('click', function(e) {
+                        toggleNodeSelection(node);
+                    });
+
+                    node.addEventListener('dblclick', function(e) {
+                        showPopup(node);
+                    });
+
+                    makeResizable(node);
+                    updateStyles();
+
+                    undoStack.push({
+                        type: 'create',
+                        nodeId: node.id
+                    });
+                }
+
+                function editSelectedNode() {
+                    if (selectedNodes.length === 1) {
+                        const node = document.getElementById(selectedNodes[0]);
+                        showPopup(node);
+                    } else {
+                        alert('Vui lòng chọn một nút để sửa.');
+                    }
+                }
+
+                function deleteSelectedNode() {
+                    if (selectedNodes.length > 0) {
+                        selectedNodes.forEach(nodeId => {
+                            const node = document.getElementById(nodeId);
+                            undoStack.push({
+                                type: 'delete',
+                                nodeId: nodeId,
+                                nodeData: {
+                                    content: node.querySelector('.node-content').innerText,
+                                    left: node.style.left,
+                                    top: node.style.top,
+                                    width: node.style.width,
+                                    height: node.style.height,
+                                    backgroundColor: node.style.backgroundColor,
+                                    color: node.style.color,
+                                    borderColor: node.style.borderColor,
+                                    fontFamily: node.style.fontFamily,
+                                    fontSize: node.style.fontSize,
+                                    borderRadius: node.style.borderRadius
+                                },
+                                connections: instance.getConnections({source: nodeId}).concat(instance.getConnections({target: nodeId}))
+                            });
+                            instance.remove(nodeId);
+                        });
+                        selectedNodes = [];
+                   } else {
+                        alert('Vui lòng chọn ít nhất một nút để xóa.');
+                    }
+                }
+
+                function showPopup(node) {
+                    currentEditingNode = node;
+                    popupInput.value = node.querySelector('.node-content').innerText;
+                    popup.style.display = 'block';
+                }
+
+                function updateNodeContent() {
+                    if (currentEditingNode) {
+                        const oldContent = currentEditingNode.querySelector('.node-content').innerText;
+                        currentEditingNode.querySelector('.node-content').innerText = popupInput.value;
+                        popup.style.display = 'none';
+                        undoStack.push({
+                            type: 'edit',
+                            nodeId: currentEditingNode.id,
+                            oldContent: oldContent,
+                            newContent: popupInput.value
+                        });
+                        currentEditingNode = null;
+                    }
+                }
+
+                window.updateNodeContent = updateNodeContent; // Make it globally accessible
+
+                function toggleNodeSelection(node) {
+                    if (selectedNodes.includes(node.id)) {
+                        selectedNodes = selectedNodes.filter(id => id !== node.id);
+                        node.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)';
+                    } else {
+                        selectedNodes.push(node.id);
+                        node.style.boxShadow = '0 0 0 2px #1abc9c, 0 4px 6px rgba(0,0,0,0.1)';
+                    }
+                }
+
+                function makeResizable(node) {
+                    const resizer = node.querySelector('.resize-handle');
+                    let originalWidth, originalHeight, originalX, originalY;
+
+                    resizer.addEventListener('mousedown', initResize, false);
+
+                    function initResize(e) {
+                        e.stopPropagation();
+                        originalWidth = parseFloat(getComputedStyle(node, null).getPropertyValue('width').replace('px', ''));
+                        originalHeight = parseFloat(getComputedStyle(node, null).getPropertyValue('height').replace('px', ''));
+                        originalX = e.clientX;
+                        originalY = e.clientY;
+                        window.addEventListener('mousemove', resize, false);
+                        window.addEventListener('mouseup', stopResize, false);
+                    }
+
+                    function resize(e) {
+                        const width = originalWidth + (e.clientX - originalX);
+                        const height = originalHeight + (e.clientY - originalY);
+                        node.style.width = width + 'px';
+                        node.style.height = height + 'px';
+                        instance.repaintEverything();
+                    }
+
+                    function stopResize() {
+                        window.removeEventListener('mousemove', resize, false);
+                        window.removeEventListener('mouseup', stopResize, false);
+                    }
+                }
+
+                function connectNodes() {
+                    if (selectedNodes.length >= 2) {
+                        for (let i = 0; i < selectedNodes.length - 1; i++) {
+                            const connection = instance.connect({ source: selectedNodes[i], target: selectedNodes[i+1] });
+                            undoStack.push({
+                                type: 'connect',
+                                connection: connection
+                            });
+                        }
+                        selectedNodes.forEach(id => {
+                            document.getElementById(id).style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)';
+                        });
+                        selectedNodes = [];
+                    } else {
+                        alert('Vui lòng chọn ít nhất hai nút để kết nối.');
+                    }
+                }
+
+                function deleteSelectedConnection() {
+                    if (selectedConnection) {
+                        undoStack.push({
+                            type: 'deleteConnection',
+                            connection: selectedConnection
+                        });
+                        instance.deleteConnection(selectedConnection);
+                        selectedConnection = null;
+                    } else {
+                        alert('Vui lòng chọn một kết nối để xóa.');
+                    }
+                }
+
+                function undo() {
+                    if (undoStack.length > 0) {
+                        const lastAction = undoStack.pop();
+                        switch (lastAction.type) {
+                            case 'create':
+                                instance.remove(lastAction.nodeId);
+                                break;
+                            case 'delete':
+                                recreateNode(lastAction.nodeId, lastAction.nodeData);
+                                lastAction.connections.forEach(conn => {
+                                    instance.connect({
+                                        source: conn.sourceId,
+                                        target: conn.targetId
+                                    });
+                                });
+                                break;
+                            case 'edit':
+                                const node = document.getElementById(lastAction.nodeId);
+                                if (node) {
+                                    node.querySelector('.node-content').innerText = lastAction.oldContent;
+                                }
+                                break;
+                            case 'connect':
+                                instance.deleteConnection(lastAction.connection);
+                                break;
+                            case 'deleteConnection':
+                                instance.connect({
+                                    source: lastAction.connection.sourceId,
+                                    target: lastAction.connection.targetId
+                                });
+                                break;
+                        }
+                    } else {
+                        alert('Không có hành động nào để khôi phục.');
+                    }
+                }
+
+                function recreateNode(id, data) {
+                    const node = document.createElement('div');
+                    node.id = id;
+                    node.className = 'mindmap-node';
+                    node.innerHTML = `<div class="node-content">${data.content}</div><div class="resize-handle"></div>`;
+                    node.style.left = data.left;
+                    node.style.top = data.top;
+                    node.style.width = data.width;
+                    node.style.height = data.height;
+                    node.style.backgroundColor = data.backgroundColor;
+                    node.style.color = data.color;
+                    node.style.borderColor = data.borderColor;
+                    node.style.fontFamily = data.fontFamily;
+                    node.style.fontSize = data.fontSize;
+                    node.style.borderRadius = data.borderRadius;
+
+                    mindmapContainer.appendChild(node);
+                    instance.draggable(node);
+                    instance.makeSource(node, {
+                        filter: ".node-content",
+                        anchor: "Continuous"
+                    });
+                    instance.makeTarget(node, {
+                        dropOptions: { hoverClass: "dragHover" },
+                        anchor: "Continuous"
+                    });
+
+                    node.addEventListener('click', function(e) {
+                        toggleNodeSelection(node);
+                    });
+
+                    node.addEventListener('dblclick', function(e) {
+                        showPopup(node);
+                    });
+
+                    makeResizable(node);
+                }
+
+                function handleKeyPress(e) {
+                    if (e.key === 'Delete') {
+                        deleteSelectedNode();
+                    }
+                }
+
+                function updateStyles() {
+                    const nodes = document.querySelectorAll('.mindmap-node');
+                    nodes.forEach(node => {
+                        node.style.backgroundColor = nodeColorInput.value;
+                        node.style.color = textColorInput.value;
+                        node.style.borderColor = borderColorInput.value;
+                        node.style.fontFamily = fontFamilySelect.value;
+                        node.style.fontSize = `${fontSizeInput.value}px`;
+                        
+                        if (nodeShapeSelect.value === 'oval') {
+                            node.style.borderRadius = '50%';
+                        } else {
+                            node.style.borderRadius = '5px';
+                        }
+                    });
+                }
+
+                function sendEmail() {
+                    const creator = document.getElementById('creator').value;
+                    const department = document.getElementById('department').value;
+                    const date = document.getElementById('date').value;
+                    const subject = encodeURIComponent('Lược đồ triển khai kế hoạch');
+                    const body = encodeURIComponent(`Người lập: ${creator}\nBộ phận: ${department}\nNgày: ${date}\n\nVui lòng xem file đính kèm để biết chi tiết lược đồ.`);
+                    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+                }
+
+                function exportImage() {
+                    html2canvas(mindmapContainer).then(canvas => {
+                        const link = document.createElement('a');
+                        link.download = 'mindmap.png';
+                        link.href = canvas.toDataURL();
+                        link.click();
+                    });
+                }
+
+                function exportPdf() {
+                    const { jsPDF } = window.jspdf;
+                    const pdf = new jsPDF('l', 'mm', 'a4');
+
+                    const creator = document.getElementById('creator').value;
+                    const department = document.getElementById('department').value;
+                    const date = document.getElementById('date').value;
+                    const title = document.getElementById('mindmap-title').value;
+
+                    pdf.setFont("helvetica", "bold");
+                    pdf.setFontSize(16);
+                    pdf.text(title || "LƯỢC ĐỒ TRIỂN KHAI KẾ HOẠCH - IDECO", 10, 20);
+
+                    pdf.setFont("helvetica", "normal");
+                    pdf.setFontSize(12);
+                    pdf.text(`Người lập: ${creator}`, 10, 30);
+                    pdf.text(`Bộ phận: ${department}`, 10, 40);
+                    pdf.text(`Ngày: ${date}`, 10, 50);
+
+                    html2canvas(mindmapContainer).then(canvas => {
+                        const imgData = canvas.toDataURL('image/png');
+                        const imgProps = pdf.getImageProperties(imgData);
+                        const pdfWidth = pdf.internal.pageSize.getWidth();
+                        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+                        pdf.addImage(imgData, 'PNG', 10, 60, pdfWidth - 20, pdfHeight - 20);
+                        pdf.save('mindmap.pdf');
+                    });
+                }
+
+                function exportWord() {
+                    const docx = window.docx;
+                    const { Document, Packer, Paragraph, TextRun, ImageRun } = docx;
+
+                    const creator = document.getElementById('creator').value;
+                    const department = document.getElementById('department').value;
+                    const date = document.getElementById('date').value;
+                    const title = document.getElementById('mindmap-title').value;
+
+                    const doc = new Document({
+                        sections: [{
+                            properties: {},
+                            children: [
+                                new Paragraph({
+                                    children: [
+                                        new TextRun({
+                                            text: title || "LƯỢC ĐỒ TRIỂN KHAI KẾ HOẠCH - IDECO",
+                                            bold: true,
+                                            size: 32,
+                                        }),
+                                    ],
+                                }),
+                                new Paragraph({
+                                    children: [
+                                        new TextRun(`Người lập: ${creator}`),
+                                        new TextRun({ break: 1 }),
+                                        new TextRun(`Bộ phận: ${department}`),
+                                        new TextRun({ break: 1 }),
+                                        new TextRun(`Ngày: ${date}`),
+                                        new TextRun({ break: 2 }),
+                                    ],
+                                }),
+                            ],
+                        }],
+                    });
+
+                    html2canvas(mindmapContainer).then(canvas => {
+                        canvas.toBlob(blob => {
+                            const reader = new FileReader();
+                            reader.onload = function(e) {
+                                const imageBase64 = e.target.result;
+                                const image = new ImageRun({
+                                    data: imageBase64,
+                                    transformation: {
+                                        width: 600,
+                                        height: 400,
+                                    },
+                                });
+
+                                doc.addSection({
+                                    children: [new Paragraph(image)],
+                                });
+
+                                Packer.toBlob(doc).then(blob => {
+                                    const url = window.URL.createObjectURL(blob);
+                                    const link = document.createElement('a');
+                                    link.href = url;
+                                    link.download = 'mindmap.docx';
+                                    link.click();
+                                    window.URL.revokeObjectURL(url);
+                                });
+                            };
+                            reader.readAsDataURL(blob);
+                        });
+                    });
+                }
+
+                function saveMindmap() {
+                    const mindmapData = {
+                        nodes: [],
+                        connections: [],
+                        creator: document.getElementById('creator').value,
+                        department: document.getElementById('department').value,
+                        date: document.getElementById('date').value,
+                        title: document.getElementById('mindmap-title').value
+                    };
+
+                    document.querySelectorAll('.mindmap-node').forEach(node => {
+                        mindmapData.nodes.push({
+                            id: node.id,
+                            content: node.querySelector('.node-content').innerText,
+                            left: node.style.left,
+                            top: node.style.top,
+                            width: node.style.width,
+                            height: node.style.height,
+                            backgroundColor: node.style.backgroundColor,
+                            color: node.style.color,
+                            borderColor: node.style.borderColor,
+                            fontFamily: node.style.fontFamily,
+                            fontSize: node.style.fontSize,
+                            borderRadius: node.style.borderRadius
+                        });
+                    });
+
+                    instance.getAllConnections().forEach(connection => {
+                        mindmapData.connections.push({
+                            source: connection.sourceId,
+                            target: connection.targetId
+                        });
+                    });
+
+                    localStorage.setItem('mindmapData', JSON.stringify(mindmapData));
+                    alert('Mindmap đã được lưu thành công!');
+                }
+
+                function loadMindmap() {
+                    const savedData = localStorage.getItem('mindmapData');
+                    if (savedData) {
+                        const mindmapData = JSON.parse(savedData);
+                        
+                        // Clear existing mindmap
+                        mindmapContainer.innerHTML = '';
+                        instance.deleteEveryEndpoint();
+
+                        // Load metadata
+                        document.getElementById('creator').value = mindmapData.creator || '';
+                        document.getElementById('department').value = mindmapData.department || '';
+                        document.getElementById('date').value = mindmapData.date || '';
+                        document.getElementById('mindmap-title').value = mindmapData.title || '';
+                        updateTitle();
+                        updateMetadata();
+
+                        // Recreate nodes
+                        mindmapData.nodes.forEach(nodeData => {
+                            recreateNode(nodeData.id, nodeData);
+                        });
+
+                        // Recreate connections
+                        mindmapData.connections.forEach(conn => {
+                            instance.connect({ source: conn.source, target: conn.target });
+                        });
+
+                        alert('Mindmap đã được tải thành công!');
+                    } else {
+                        alert('Không tìm thấy dữ liệu mindmap đã lưu!');
+                    }
+                }
+
+                function updateTitle() {
+                    const title = document.getElementById('mindmap-title').value;
+                    document.getElementById('main-title').innerText = title || "LƯỢC ĐỒ TRIỂN KHAI KẾ HOẠCH - IDECO";
+                }
+
+          function updateMetadata() {
+                    const creator = document.getElementById('creator').value;
+                    const department = document.getElementById('department').value;
+                    const date = document.getElementById('date').value;
+                    
+                    document.getElementById('creator-info').innerText = `Người lập: ${creator}`;
+                    document.getElementById('department-info').innerText = `Bộ phận: ${department}`;
+                    document.getElementById('date-info').innerText = `Ngày: ${date}`;
+                }
+
+                // Add event listeners for metadata updates
+                document.getElementById('creator').addEventListener('input', updateMetadata);
+                document.getElementById('department').addEventListener('input', updateMetadata);
+                document.getElementById('date').addEventListener('input', updateMetadata);
+
+                // Initialize connection selection
+                instance.bind("click", function(conn, originalEvent) {
+                    if (selectedConnection) {
+                        selectedConnection.setPaintStyle({ stroke: "#2c3e50", strokeWidth: 2 });
+                    }
+                    conn.setPaintStyle({ stroke: "#1abc9c", strokeWidth: 4 });
+                    selectedConnection = conn;
+                });
+
+                // Initialize the mindmap
+                updateTitle();
+                updateMetadata();
+
+                window.updateTitle = updateTitle;
+                window.updateMetadata = updateMetadata;
+            });
+        });
+    </script>
+</body>
+</html>
